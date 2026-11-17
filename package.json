@@ -1,0 +1,24 @@
+{
+  "name": "spar-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spar — an adversarial self-testing gym for decision agents: sends trap/valid/fail-closed vectors to YOUR agent, scores the behaviour, and anchors the signed scorecard on zkVerify.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/main.js",
+    "dev": "tsc && node dist/src/main.js",
+    "test": "tsc && node dist/test/harness.js"
+  },
+  "dependencies": {
+    "@polkadot/api": "^15.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

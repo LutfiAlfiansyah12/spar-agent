@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Spar — adversarial self-testing gym for decision agents</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --line:#1f2937; --text:#e5e7eb; --dim:#9ca3af; --accent:#f0abfc; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 ui-sans-serif,system-ui,"Segoe UI",sans-serif; }
+  .wrap { max-width:900px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  h1 span { color:var(--accent); }
+  p.sub { color:var(--dim); margin:0 0 28px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+  label { display:block; font-size:13px; color:var(--dim); margin:12px 0 4px; text-transform:uppercase; letter-spacing:.06em; }
+  input[type=text], input[type=password], select { width:100%; background:#0d1420; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font:14px ui-monospace,Consolas,monospace; }
+  input:focus, select:focus { outline:1px solid var(--accent); }
+  .row { display:flex; gap:12px; } .row > div { flex:1; }
+  button { background:var(--accent); color:#2a0830; border:0; border-radius:8px; padding:11px 22px; font-weight:700; font-size:14px; cursor:pointer; margin-top:16px; }
+  button:disabled { opacity:.5; cursor:default; }
+  pre { background:#0a0e14; border:1px solid var(--line); border-radius:8px; padding:14px; overflow:auto; font-size:12.5px; max-height:460px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:12px; font-weight:700; }
+  .ok { background:#064e3b; color:var(--ok); } .warn { background:#451a03; color:var(--warn); } .bad { background:#450a0a; color:var(--bad); }
+  .note { color:var(--dim); font-size:13px; margin-top:8px; }
+  .hidden { display:none; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:.05em; }
+  td.mono { font-family:ui-monospace,Consolas,monospace; }
+  .grade { font-size:40px; font-weight:800; }
+  .gradeA { color:var(--ok); } .gradeB { color:#a7f3d0; } .gradeC { color:var(--warn); } .gradeD { color:var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span>Spar</span> — adversarial self-testing gym</h1>
+  <p class="sub">
+    Probe <strong>your own</strong> decision agent with trap / valid / fail-closed vectors, get a graded
+    scorecard, signed (Ed25519) and anchored on <strong>zkVerify</strong> — proof that your agent fails closed
+    before the platform scores it for real.
+  </p>
+
+  <div class="card">
+    <h2>Run a spar</h2>
+    <label>Target agent URL (full handler path, e.g. https://your-agent.example.com/agent)</label>
+    <input type="text" id="target" placeholder="https://your-agent.example.com/agent" />
+    <div class="row">
+      <div>
+        <label>Auth mode</label>
+        <select id="auth">
+          <option value="none">none (plain POST)</option>
+          <option value="hmac">hmac (Agent Games signed contract)</option>
+        </select>
+      </div>
+      <div id="secretBox" class="hidden">
+        <label>HMAC secret (test secret only — memory-only, never stored)</label>
+        <input type="password" id="secret" placeholder="paste the agent's secret for this run" />
+      </div>
+    </div>
+    <div class="note">
+      Suites: <b>preflight</b> (handshake) · <b>valid</b> (must APPROVE) · <b>traps</b> (must REJECT: proof reuse,
+      VK substitution, circuit mismatch, balance, recipient, amount, expiry, timestamps, deadline) ·
+      <b>failclosed</b> (tampered/missing signature, garbage body — must NOT approve).
+      Only spar against agents you own or control.
+    </div>
+    <button id="go">Run spar</button>
+    <button id="verifyBtn" class="hidden" style="background:transparent;color:var(--accent);border:1px solid var(--accent);margin-left:10px">View report</button>
+  </div>
+
+  <div class="card hidden" id="result">
+    <h2>Scorecard <span id="statusBadge" class="badge warn"></span> <span id="grade" class="grade"></span></h2>
+    <div id="summary"></div>
+    <table id="results"><thead><tr><th>Suite</th><th>Vector</th><th>Expect</th><th>Got</th><th>Verdict</th><th>Δ</th></tr></thead><tbody></tbody></table>
+    <div class="note" id="anchorNote"></div>
+    <details><summary>raw scorecard JSON</summary><pre id="rawJson"></pre></details>
+  </div>
+
+  <div class="card hidden" id="verifyCard">
+    <h2>Verification report</h2>
+    <pre id="verifyJson"></pre>
+  </div>
+</div>
+
+<script>
+  let runId = null, pollTimer = null;
+  const $ = (id) => document.getElementById(id);
+
+  $('auth').onchange = () => $('secretBox').classList.toggle('hidden', $('auth').value !== 'hmac');
+
+  function setStatus(s) {
+    const el = $('statusBadge');
+    el.className = 'badge ' + (s === 'done' ? 'ok' : s === 'failed' ? 'bad' : 'warn');
+    el.textContent = s;
+  }
+
+  function gradeClass(g) { return g === 'A' ? 'gradeA' : g === 'B' ? 'gradeB' : g === 'C' ? 'gradeC' : 'gradeD'; }
+
+  function render(doc) {
+    setStatus(doc.status);
+    $('rawJson').textContent = JSON.stringify(doc, null, 2);
+    if (doc.summary) {
+      const s = doc.summary;
+      $('grade').textContent = s.grade;
+      $('grade').className = 'grade ' + gradeClass(s.grade);
+      $('summary').innerHTML =
+        `score <b>${s.total_delta}</b> / ${s.max_delta} · pass ${s.pass} · fail ${s.fail} · timeout ${s.timeout} · ` +
+        `<span style="color:${s.trap_approved > 0 ? 'var(--bad)' : 'var(--ok)'}">traps approved: <b>${s.trap_approved}</b></span>`;
+      const tb = $('results').querySelector('tbody');
+      tb.innerHTML = '';
+      for (const r of doc.results) {
+        const tr = document.createElement('tr');
+        const color = r.verdict === 'PASS' ? 'var(--ok)' : r.verdict === 'FAIL' ? 'var(--bad)' : r.verdict === 'SKIPPED' ? 'var(--dim)' : 'var(--warn)';
+        tr.innerHTML = `<td class="mono">${r.suite}</td><td>${r.name}</td><td class="mono">${r.expect}</td>` +
+          `<td class="mono">${r.got.http_status ?? '—'}${r.got.decision ? ' ' + r.got.decision : ''}${r.got.reason_code ? ' (' + r.got.reason_code + ')' : ''} ${r.got.ms}ms</td>` +
+          `<td style="color:${color};font-weight:700">${r.verdict}</td><td class="mono">${r.delta}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+    if (doc.status === 'done') {
+      const a = doc.anchor;
+      $('anchorNote').innerHTML = a.status === 'finalized'
+        ? `anchored on zkVerify (${a.network}): <a href="${a.explorer_url}" target="_blank">${a.explorer_url}</a> — remark = <code>spar/v1/${doc.commitment.slice(0, 16)}…</code>`
+        : a.status === 'disabled'
+          ? 'anchoring disabled on this deployment (scorecard is still signed + hash-committed)'
+          : `anchor status: ${a.status} — re-check in a minute`;
+      $('verifyBtn').classList.remove('hidden');
+    }
+  }
+
+  async function poll() {
+    const r = await fetch('/runs/' + runId);
+    const doc = await r.json();
+    render(doc);
+    if (['done', 'failed'].includes(doc.status)) clearInterval(pollTimer);
+  }
+
+  $('go').onclick = async () => {
+    $('go').disabled = true;
+    $('result').classList.add('hidden');
+    $('verifyCard').classList.add('hidden');
+    try {
+      const payload = { target_url: $('target').value.trim(), auth: $('auth').value };
+      if (payload.auth === 'hmac') payload.hmac_secret = $('secret').value;
+      const r = await fetch('/spar', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      const body = await r.json();
+      if (r.status !== 200) { alert('Error ' + r.status + ': ' + (body?.error?.message ?? 'unknown')); return; }
+      runId = body.id;
+      $('result').classList.remove('hidden');
+      setStatus('queued');
+      clearInterval(pollTimer);
+      pollTimer = setInterval(poll, 1500);
+      poll();
+    } finally {
+      $('go').disabled = false;
+    }
+  };
+
+  $('verifyBtn').onclick = async () => {
+    if (!runId) return;
+    const r = await fetch('/runs/' + runId + '/report');
+    $('verifyCard').classList.remove('hidden');
+    $('verifyJson').textContent = JSON.stringify(await r.json(), null, 2);
+  };
+</script>
+</body>
+</html>

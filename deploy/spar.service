@@ -1,0 +1,28 @@
+# systemd unit — Spar agent sebagai service + auto-restart
+# Letakkan di VPS: /etc/systemd/system/spar.service
+# Ganti /root/spar sesuai lokasi project.
+
+[Unit]
+Description=Spar Agent (Agent Games Wildcard — adversarial self-testing gym)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/spar
+ExecStartPre=/usr/bin/mkdir -p /root/spar/data
+ExecStart=/usr/bin/node dist/src/main.js
+Restart=always
+RestartSec=3
+EnvironmentFile=/root/spar/.env
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Log ke journald — lihat dengan: journalctl -u spar -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
