@@ -25,6 +25,7 @@ import {
   newRunId,
   type SparRunDoc,
   type SignedCore,
+  type RunSummary,
   type VectorResult,
   type AuthMode,
 } from './scorecard.js';
@@ -272,7 +273,7 @@ function classify(vector: Vector, expect: string, out: ProbeOutcome): VectorResu
   };
 }
 
-function summarize(results: VectorResult[]): SparRunDoc['summary'] {
+function summarize(results: VectorResult[]): RunSummary {
   const scored = results.filter((r) => r.verdict !== 'SKIPPED');
   const total = scored.reduce((s, r) => s + r.delta, 0);
   const max = 12 * scored.length;
@@ -390,7 +391,7 @@ export class RunWorker {
 
 /** Sign + commit the finished run (called once, when the last vector lands). */
 function finalize(doc: SparRunDoc): void {
-  doc.summary = summarize(doc.results);
+  const summary = summarize(doc.results);
   // If the target auth-rejected EVERY probe — including the correctly-signed
   // ones — the grade measures nothing but a broken secret/header. Flag it.
   if (
@@ -398,9 +399,10 @@ function finalize(doc: SparRunDoc): void {
     doc.results.length > 0 &&
     doc.results.every((r) => r.got.http_status === 401)
   ) {
-    doc.summary.auth_all_rejected = true;
+    summary.auth_all_rejected = true;
     log.warn('auth layer rejected every vector — secret/header mismatch suspected', { id: doc.id });
   }
+  doc.summary = summary;
   const core: SignedCore = {
     v: doc.v,
     id: doc.id,
