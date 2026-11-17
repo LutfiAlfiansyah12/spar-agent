@@ -91,14 +91,26 @@ export function validateTargetUrl(rawUrl: string): URL {
 
 async function resolveAndCheck(hostname: string): Promise<void> {
   if (config.runner.allowPrivateTargets) return;
-  let records: dns.LookupAddress[];
-  try {
-    records = await dns.promises.lookup(hostname.toLowerCase(), { all: true, verbatim: true });
-  } catch {
-    throw new SparRequestError('DNS_FAILURE', `cannot resolve target host ${hostname}`);
+  const host = hostname.toLowerCase();
+  // DNS resolvers hiccup occasionally (systemd-resolved, busy resolvers) —
+  // retry a few times before declaring the target unreachable.
+  let records: dns.LookupAddress[] | null = null;
+  let lastErr: string | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      records = await dns.promises.lookup(host, { all: true, verbatim: true });
+      lastErr = null;
+      break;
+    } catch (e) {
+      lastErr = String((e as Error).message).slice(0, 80);
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 400));
+    }
   }
-  if (records.length === 0) {
-    throw new SparRequestError('DNS_FAILURE', `no addresses for host ${hostname}`);
+  if (!records || records.length === 0) {
+    throw new SparRequestError(
+      'DNS_FAILURE',
+      `cannot resolve target host ${hostname}${lastErr ? ` (${lastErr})` : ''}`,
+    );
   }
   for (const r of records) {
     if (ipIsPrivate(r.address)) {
