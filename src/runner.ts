@@ -378,6 +378,9 @@ export class RunWorker {
       doc.status = 'failed';
       doc.error = String((e as Error).message).slice(0, 200);
       store.put(doc);
+      if (config.anchor.mode !== 'none') {
+        store.updateAnchor(doc.id, { status: 'failed', error: 'run failed — nothing to anchor' });
+      }
       log.warn('spar run failed', { id: runId, error: doc.error });
     }
   }
