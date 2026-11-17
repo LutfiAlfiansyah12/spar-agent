@@ -49,6 +49,12 @@ export interface RunSummary {
   /** The scariest metric: how many traps / garbage inputs the target APPROVED. */
   trap_approved: number;
   grade: 'A' | 'B' | 'C' | 'D';
+  /**
+   * True when the target returned 401 to EVERY vector — the auth layer
+   * rejected even correctly-signed probes, so the scorecard says nothing
+   * about the decision logic. Fix the secret/header before reading grades.
+   */
+  auth_all_rejected?: boolean;
 }
 
 export interface AnchorInfo {

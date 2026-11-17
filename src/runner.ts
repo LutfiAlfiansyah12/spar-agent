@@ -391,6 +391,16 @@ export class RunWorker {
 /** Sign + commit the finished run (called once, when the last vector lands). */
 function finalize(doc: SparRunDoc): void {
   doc.summary = summarize(doc.results);
+  // If the target auth-rejected EVERY probe — including the correctly-signed
+  // ones — the grade measures nothing but a broken secret/header. Flag it.
+  if (
+    doc.target.auth_mode === 'hmac' &&
+    doc.results.length > 0 &&
+    doc.results.every((r) => r.got.http_status === 401)
+  ) {
+    doc.summary.auth_all_rejected = true;
+    log.warn('auth layer rejected every vector — secret/header mismatch suspected', { id: doc.id });
+  }
   const core: SignedCore = {
     v: doc.v,
     id: doc.id,

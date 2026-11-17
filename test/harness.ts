@@ -143,6 +143,19 @@ async function main(): Promise<void> {
   check('open target: traps all rejected', doc3.summary?.trap_approved === 0);
   check('open target: grade A (honest no-auth agent)', doc3.summary?.grade === 'A' && doc3.summary?.total_delta === 168);
 
+  // ── auth-all-rejected flag ───────────────────────────────────────────────
+  console.log('\n[auth-all-rejected detection]');
+  const start4 = await (
+    await fetch(base + '/spar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ target_url: fixture.url('/strict401'), auth: 'hmac', hmac_secret: HARNESS_SECRET }),
+    })
+  ).json();
+  const doc4 = await waitForDone(base, (start4 as { id: string }).id);
+  check('strict401 run completes', doc4.status === 'done');
+  check('auth_all_rejected flagged', doc4.summary?.auth_all_rejected === true);
+
   // ── SSRF guard ───────────────────────────────────────────────────────────
   console.log('\n[SSRF guard]');
   config.runner.allowPrivateTargets = false;

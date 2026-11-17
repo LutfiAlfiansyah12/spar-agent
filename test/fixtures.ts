@@ -116,6 +116,13 @@ export function startFixture(): Promise<Fixture> {
         return;
       }
 
+      if (p === '/strict401') {
+        // Auth layer that rejects EVERYTHING — even valid signatures
+        // (simulates a secret/header mismatch on the target).
+        send(401, { error: 'invalid signature' });
+        return;
+      }
+
       if (p === '/greedy') {
         let body: Record<string, unknown>;
         try {

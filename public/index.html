@@ -119,6 +119,11 @@
       }
     }
     if (doc.status === 'done') {
+      if (doc.summary?.auth_all_rejected) {
+        $('summary').innerHTML =
+          '<span style="color:var(--bad);font-weight:700">⚠ AUTH REJECTED EVERY VECTOR — ' +
+          'the target refused even correctly-signed probes. Check the HMAC secret/header before reading grades.</span>';
+      }
       const a = doc.anchor;
       $('anchorNote').innerHTML = a.status === 'finalized'
         ? `anchored on zkVerify (${a.network}): <a href="${a.explorer_url}" target="_blank">${a.explorer_url}</a> — remark = <code>spar/v1/${doc.commitment.slice(0, 16)}…</code>`
