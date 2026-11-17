@@ -156,6 +156,29 @@ async function main(): Promise<void> {
   check('strict401 run completes', doc4.status === 'done');
   check('auth_all_rejected flagged', doc4.summary?.auth_all_rejected === true);
 
+  // ── built-in practice targets ────────────────────────────────────────────
+  console.log('\n[built-in practice targets]');
+  const startPT = await (
+    await fetch(base + '/spar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ target_url: base + '/practice-target', auth: 'none' }),
+    })
+  ).json();
+  const docPT = await waitForDone(base, (startPT as { id: string }).id);
+  check('practice honest: grade A, zero traps', docPT.summary?.grade === 'A' && docPT.summary?.trap_approved === 0);
+  check('practice honest: auth vectors skipped', docPT.summary?.skipped === 2);
+
+  const startPG = await (
+    await fetch(base + '/spar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ target_url: base + '/practice-target-greedy', auth: 'none' }),
+    })
+  ).json();
+  const docPG = await waitForDone(base, (startPG as { id: string }).id);
+  check('practice greedy: grade D with traps approved', docPG.summary?.grade === 'D' && (docPG.summary?.trap_approved ?? 0) >= 9);
+
   // ── SSRF guard ───────────────────────────────────────────────────────────
   console.log('\n[SSRF guard]');
   config.runner.allowPrivateTargets = false;

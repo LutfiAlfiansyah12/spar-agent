@@ -85,11 +85,26 @@ curl -sS https://<spar-host>/runs/<id>          # live progress + results
 curl -sS https://<spar-host>/runs/<id>/report   # signed scorecard + verification report
 ```
 
-The report re-checks the signature and commitment, and includes the anchor
+The report re-checks the signature and the commitment, and includes the anchor
 status + explorer link once the remark is finalized.
 
-Demo UI: open `/` in a browser, paste your agent URL + optional test secret,
-watch the vector table fill in.
+Demo UI: open `/` in a browser — one-click buttons spar against the **built-in
+practice targets** below, no setup needed.
+
+## Built-in practice targets
+
+You don't need to own another agent to see spar work. The service ships with
+two miniature decision agents on its own public endpoint:
+
+| Route | Behaviour | Expected spar result |
+|---|---|---|
+| `POST /practice-target` | honest: acknowledges preflight, approves valid tasks, rejects every trap, fail-closed on garbage | **grade A, 0 traps approved** |
+| `POST /practice-target-greedy` | approves everything non-preflight | **grade D, ~11 traps approved** |
+
+They accept plain POSTs (`auth:"none"`), so auth-contract vectors are marked
+`SKIPPED` in those runs — which is itself part of the demonstration: those
+vectors only make sense against a signed contract. Use them to see spar grade
+real behaviour in one click from the demo UI.
 
 ## Trust model & honest limitations
 

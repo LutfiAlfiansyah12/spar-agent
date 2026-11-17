@@ -66,6 +66,8 @@
       Only spar against agents you own or control.
     </div>
     <button id="go">Run spar</button>
+    <button id="demoHonest" class="ghost">Try: built-in honest agent</button>
+    <button id="demoGreedy" class="ghost">Try: built-in greedy agent</button>
     <button id="verifyBtn" class="hidden" style="background:transparent;color:var(--accent);border:1px solid var(--accent);margin-left:10px">View report</button>
   </div>
 
@@ -88,6 +90,18 @@
   const $ = (id) => document.getElementById(id);
 
   $('auth').onchange = () => $('secretBox').classList.toggle('hidden', $('auth').value !== 'hmac');
+
+  $('demoHonest').onclick = () => {
+    $('target').value = location.origin + '/practice-target';
+    $('auth').value = 'none';
+    $('auth').onchange();
+  };
+  $('demoGreedy').onclick = () => {
+    $('target').value = location.origin + '/practice-target-greedy';
+    $('auth').value = 'none';
+    $('auth').onchange();
+    setTimeout(() => $('go').click(), 50);
+  };
 
   function setStatus(s) {
     const el = $('statusBadge');

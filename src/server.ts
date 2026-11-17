@@ -22,6 +22,7 @@ import { verifyRunDoc } from './scorecard.js';
 import { SparStore } from './store.js';
 import { AnchorWorker } from './anchor.js';
 import { createRun, parseSparRequest, SparRequestError, RunWorker } from './runner.js';
+import { handlePractice, PRACTICE_TARGET, PRACTICE_GREEDY } from './practice.js';
 
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 
@@ -136,6 +137,19 @@ export function initApp(): App {
           allow_private_targets: config.runner.allowPrivateTargets,
         });
         finish(200);
+        return;
+      }
+
+      // Built-in practice targets — probe them via the public URL with
+      // auth:"none". Honest one grades A; greedy one grades D.
+      if (
+        req.method === 'POST' &&
+        (url.pathname === PRACTICE_TARGET || url.pathname === PRACTICE_GREEDY)
+      ) {
+        const raw = await readBody(req);
+        const out = handlePractice(url.pathname, Buffer.from(raw, 'utf8'));
+        json(res, out!.status, out!.body);
+        finish(out!.status);
         return;
       }
 
